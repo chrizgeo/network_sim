@@ -9,27 +9,29 @@
 #include<queue>
 #include<list>
 #include<ctime>
+#include<cmath>
 
 using namespace std;
-
 /* The maximum number of realtime channels. */
 int maxChannelNUM = 16;
 /* constants */
-int packetNUM = 10000; //max number of packets we are to simulate.
+//int packetNUM = 10000; //max number of packets we are to simulate.
 int qBuffMAX = 100;   //max number of packets to keep in Q
-
+double totalBytes = 0;
+double lambda	= .01; // lambda (user-defined)
+double mu	= 8.22/1000; // mu
 
 
 struct channel{
     int priority;
     int period;
-    double deadLine;
+    int deadLine;
 };
 
 struct packet{
-    double size; //packet size
-    double deadline; //TODO remove deadline and use deadline info from channel
-    //channel channelNum;  //RT channel for the packet //TODO use channel info for priority Queueing
+    int size; //packet size
+    double deadline; //the deadline of this packet
+    //channel* chPtr;  //RT channel for the packet //TODO use channel info for priority Queueing
     double serviceTime;
     /* overload < for prioirty Q to compare the deadlines of the channel*/
 /*     bool operator<(const packet &rhs)const
@@ -47,17 +49,27 @@ struct host{
 
 struct event{
     int type; //type of the event, arrival - 0 departure - 1 , channel sensing - 2
-    double time; // time for arrival or departure.
+    int subType; // 0 for queue to tx 1 for tx to rx
     host *source; //source of the event
     host *dest; //destination of the event
-    int subType; // 0 for queue to tx 1 for tx to rx
+    int size;
+    double time; // time of the event
 };
 
 /* create sender and receiver hosts */
 host tx, *txPtr, rx, *rxPtr; 
+
 /* List needed for the simulator */
-list<event> eventList; //store the simulator events
+list<event> eventList; //store the tx and rx events
 list<event> inTransitList; //store the link events
+
+/* Helper function to find Negetive exponentially distributed time */
+double nedt(double rate)
+{
+	double u;
+	u = drand48();
+	return ((-1/rate)*log(1-u));
+}
 
 
 /* Init host function - set the properties for the host */
@@ -68,29 +80,30 @@ void init_host(host* hostPtr)
 }
 
 /* returns a new event to add to eventList */
-event new_event(int type, int subType, host* source, host* dest, double time)
+event new_event(int type, int subType, host* source, host* dest, int size, double time)
 {
     event newEvent;
     newEvent.type = type;
+    newEvent.subType = subType;
     newEvent.source = source;
     newEvent.dest = dest;
-    newEvent.subType = subType;
+    newEvent.size = size;
     /* the time needed for a departure event */
     //TODO check the time values
     if(type == 0) {
-        newEvent.time = time + 0.01;
+        newEvent.time = time + .01;
     }
 
     /* the time required for an arrival event */
     //TODO check the time values
     else if(type == 1) {
-        newEvent.time = time + 0.01;
+        newEvent.time = time + .1;
     }
 
     /* channel sensing event */
     //TODO check the time values
     else if(type == 2) {
-        newEvent.time = time + 0.01;
+        newEvent.time = time + 0.001;
     }
     /* unknown event  */
     else {
@@ -123,7 +136,7 @@ void add_event(event newEvent)
 /* Add a transit event */
 void add_transit(event newEvent)
 {
-    cout << "Transit" << endl;
+    //cout << "add Transit event" << endl;
     list<event>::iterator it;
     event lastTransit;
     lastTransit = inTransitList.back();
@@ -146,10 +159,11 @@ int main()
     cout << "Simulator start" << endl;
     /* Random number seed */
     srand48(time(NULL));
-    
+    cout << nedt(lambda) << endl;
+    cout << nedt(mu) << endl;
     /* variables */
     double currentTime = 0;  //current sim time
-
+    double throughPut = 0;
     /* Init the hosts */
     txPtr = &tx;
     rxPtr = &rx;
@@ -158,50 +172,43 @@ int main()
     
     /* add the init event */
     /* Add to Q */
-    event newEvent = new_event(0, 0, txPtr, txPtr, currentTime);
+    event newEvent = new_event(0, 0, txPtr, txPtr, 0, currentTime);
     add_event(newEvent);
     /* Get the top of the event list */
-    //event lastEvent =  eventList.front();
-    //oldTime = lastEvent.time;
-
+    event lastEvent =  eventList.front();
+    currentTime = lastEvent.time;
     /* Perform the iteration for the given number of packets */
-    for(int i = 0; i < 100; i++) {
+    while(currentTime < 100000) {
         event currentEvent = eventList.front();
         currentTime = currentEvent.time;
         /* An arrival event */
         if(currentEvent.type == 0) {
-
             /* Arrival at the Tx */
             if(currentEvent.subType == 0) {
-                cout << "Arrival at Tx" << endl;
-                /* Add new arrival event */
-                event newArrival = new_event(0, 0, currentEvent.source, currentEvent.dest, currentTime);
-                add_event(newArrival);
-
                 /* Create new packet */
                 packet newPacket;
-                newPacket.size = (rand() % 4) + 1; 
-                newPacket.serviceTime = 0.001*newPacket.size; //TODO serviceTime? is it random or fixed?
-
+                newPacket.size = (rand() % 16) + 1; 
+                newPacket.serviceTime = 0.002*newPacket.size; //TODO serviceTime? is it random or fixed?
                 /* Create departure event for this packet from the tx */
-                if(currentEvent.source->Qlength == 0) {
+                if(currentEvent.source->transmitQ.size() < qBuffMAX) {
                     currentEvent.source->transmitQ.push(newPacket);
-                    event newDeparture = new_event(1, 0, currentEvent.source, currentEvent.dest, currentTime + newPacket.serviceTime);
+                    event newDeparture = new_event(1, 0, currentEvent.source, currentEvent.dest, newPacket.size, (currentTime + newPacket.serviceTime));
                     add_event(newDeparture);
                     currentEvent.source->Qlength++;
                 }
-                else if(currentEvent.source->Qlength > 0 && (currentEvent.source->Qlength < qBuffMAX)) {
-                    currentEvent.source->transmitQ.push(newPacket);
-                    currentEvent.source->Qlength++;
-                }
                 else {
-                    currentEvent.source->numDropped++;
+                    currentEvent.source->numDropped +=newPacket.size;
                 }
+                /* Add new arrival event to generate new packet */
+                event newArrival = new_event(0, 0, currentEvent.source, currentEvent.dest, 0, currentTime);
+                add_event(newArrival);
             }
             /* Arrival of data packet at Rx */
             else if(currentEvent.subType == 1) {
-                cout << "Arrival at tx" << endl;
+                //cout << "Arrival at Rx" << endl;
                 //TODO Update transmission time
+                //cout << currentEvent.size << endl;
+                totalBytes += currentEvent.size;
                 /* Transmission complete */
                 inTransitList.pop_front();
             }
@@ -209,24 +216,25 @@ int main()
         }
         /*Departure event */
         else if(currentEvent.type == 1) {
-            packet newPacket = currentEvent.source->transmitQ.front(); // get the packet to be transmitted from the Q
             //TODO update Q time data
             
             /* Data packet departure */ {
                 if(currentEvent.source->Qlength > 0) {
+                    packet newPacket = currentEvent.source->transmitQ.front(); // get the packet to be transmitted from the Q
                     /* check if channel is free */
                     if(inTransitList.size() == 0) {
                         /* New arrival for the destination host */
-                        event newArrival = new_event(0, 1, currentEvent.dest, currentEvent.source, currentTime + (newPacket.size / (11000000 / 8)));
-                        cout << "Departure from destination" << endl;
+                        event newArrival = new_event(0, 1, currentEvent.source, currentEvent.dest, newPacket.size, currentTime + (newPacket.size / (11000000 / 8)));
+                        //cout << "Departed to destination" << endl;
                         add_event(newArrival);
                         add_transit(newArrival);
+                        currentEvent.source->transmitQ.pop();
                     }
 
                     else if(inTransitList.size() > 0) {
                         //line is busy
                         //add a channel sense event
-                        event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, currentTime);
+                        event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, 0, currentTime);
                         add_event(channelEvent);
                     }
                 }
@@ -237,22 +245,29 @@ int main()
         else if(currentEvent.type == 2) {
             /* Check if channel is free */
             if(inTransitList.size() == 0) {
-            packet newPacket = currentEvent.source->transmitQ.front(); // get the packet to be transmitted from the Q
-                        /* New arrival for the destination host */
-                        event newArrival = new_event(0, 1, currentEvent.dest, currentEvent.source, currentTime + (newPacket.size / (11000000 / 8)));
-                        add_event(newArrival);
-                        add_transit(newArrival);
-                    }
+                packet newPacket = currentEvent.source->transmitQ.front(); // get the packet to be transmitted from the Q
+                /* New arrival for the destination host */
+                event newArrival = new_event(0, 1, currentEvent.dest, currentEvent.source, newPacket.size, currentTime + (newPacket.size / (11000000 / 8)));
+                add_event(newArrival);
+                add_transit(newArrival);
+                currentEvent.source->transmitQ.pop();
+            }
 
             else if(inTransitList.size() > 0) {
                 //line is busy
                 //add a channel sense event
-                event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, currentTime);
+                event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, 0, currentTime + nedt(lambda));
                 add_event(channelEvent);
             }
             }
-        }
-
+        /* pop the processed event */    
+        eventList.pop_front();    
+    }
+    
+    throughPut = totalBytes/currentTime;
+    cout << "Throughput" << throughPut << endl;
+    cout << "Total bytes Txed" << totalBytes << endl;
+    cout << "Dropped bytes" << tx.numDropped << endl;
     return 0;
 }
 
