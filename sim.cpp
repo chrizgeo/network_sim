@@ -34,14 +34,14 @@ struct packet{
     //channel* chPtr;  //RT channel for the packet //TODO use channel info for priority Queueing
     double serviceTime;
     /* overload < for prioirty Q to compare the deadlines of the channel*/
-/*     bool operator<(const packet &rhs)const
+    bool operator<(const packet &rhs)const
     {
-        return deadline < rhs.deadline;
-    } */
+        return deadline > rhs.deadline;
+    }
 };
 
 struct host{ 
-    queue<packet> transmitQ; // Q at the host
+    priority_queue<packet> transmitQ; // Q at the host
     int Qlength; //length of the Q
     int numDropped; // number of dropped packets
 
@@ -52,8 +52,10 @@ struct event{
     int subType; // 0 for queue to tx 1 for tx to rx
     host *source; //source of the event
     host *dest; //destination of the event
-    int size;
     double time; // time of the event
+    /* Info about the packet */
+    int size;
+    double deadline;
 };
 
 /* create sender and receiver hosts */
@@ -80,7 +82,7 @@ void init_host(host* hostPtr)
 }
 
 /* returns a new event to add to eventList */
-event new_event(int type, int subType, host* source, host* dest, int size, double time)
+event new_event(int type, int subType, host* source, host* dest, int size, double deadline, double time)
 {
     event newEvent;
     newEvent.type = type;
@@ -88,6 +90,7 @@ event new_event(int type, int subType, host* source, host* dest, int size, doubl
     newEvent.source = source;
     newEvent.dest = dest;
     newEvent.size = size;
+    newEvent.deadline = deadline;
     /* the time needed for a departure event */
     //TODO check the time values
     if(type == 0) {
@@ -164,6 +167,8 @@ int main()
     /* variables */
     double currentTime = 0;  //current sim time
     double throughPut = 0;
+    double deadlineMisses = 0;
+    double deadlineMissratio = 0;
     /* Init the hosts */
     txPtr = &tx;
     rxPtr = &rx;
@@ -172,7 +177,7 @@ int main()
     
     /* add the init event */
     /* Add to Q */
-    event newEvent = new_event(0, 0, txPtr, txPtr, 0, currentTime);
+    event newEvent = new_event(0, 0, txPtr, txPtr, 0, 0, currentTime);
     add_event(newEvent);
     /* Get the top of the event list */
     event lastEvent =  eventList.front();
@@ -189,10 +194,11 @@ int main()
                 packet newPacket;
                 newPacket.size = (rand() % 16) + 1; 
                 newPacket.serviceTime = 0.002*newPacket.size; //TODO serviceTime? is it random or fixed?
+                newPacket.deadline = currentTime + 10;
                 /* Create departure event for this packet from the tx */
                 if(currentEvent.source->transmitQ.size() < qBuffMAX) {
                     currentEvent.source->transmitQ.push(newPacket);
-                    event newDeparture = new_event(1, 0, currentEvent.source, currentEvent.dest, newPacket.size, (currentTime + newPacket.serviceTime));
+                    event newDeparture = new_event(1, 0, currentEvent.source, currentEvent.dest, newPacket.size, newPacket.deadline, (currentTime + newPacket.serviceTime));
                     add_event(newDeparture);
                     currentEvent.source->Qlength++;
                 }
@@ -200,7 +206,7 @@ int main()
                     currentEvent.source->numDropped +=newPacket.size;
                 }
                 /* Add new arrival event to generate new packet */
-                event newArrival = new_event(0, 0, currentEvent.source, currentEvent.dest, 0, currentTime);
+                event newArrival = new_event(0, 0, currentEvent.source, currentEvent.dest, 0, 0, currentTime);
                 add_event(newArrival);
             }
             /* Arrival of data packet at Rx */
@@ -209,6 +215,9 @@ int main()
                 //TODO Update transmission time
                 //cout << currentEvent.size << endl;
                 totalBytes += currentEvent.size;
+                if(currentEvent.deadline < currentTime) {
+                    deadlineMisses ++;
+                }
                 /* Transmission complete */
                 inTransitList.pop_front();
             }
@@ -220,11 +229,11 @@ int main()
             
             /* Data packet departure */ {
                 if(currentEvent.source->Qlength > 0) {
-                    packet newPacket = currentEvent.source->transmitQ.front(); // get the packet to be transmitted from the Q
+                    packet newPacket = currentEvent.source->transmitQ.top(); // get the packet to be transmitted from the Q
                     /* check if channel is free */
                     if(inTransitList.size() == 0) {
                         /* New arrival for the destination host */
-                        event newArrival = new_event(0, 1, currentEvent.source, currentEvent.dest, newPacket.size, currentTime + (newPacket.size / (11000000 / 8)));
+                        event newArrival = new_event(0, 1, currentEvent.source, currentEvent.dest, newPacket.size, newPacket.deadline, currentTime + (newPacket.size / (11000000 / 8)));
                         //cout << "Departed to destination" << endl;
                         add_event(newArrival);
                         add_transit(newArrival);
@@ -234,7 +243,7 @@ int main()
                     else if(inTransitList.size() > 0) {
                         //line is busy
                         //add a channel sense event
-                        event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, 0, currentTime);
+                        event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, 0, 0, currentTime);
                         add_event(channelEvent);
                     }
                 }
@@ -245,9 +254,9 @@ int main()
         else if(currentEvent.type == 2) {
             /* Check if channel is free */
             if(inTransitList.size() == 0) {
-                packet newPacket = currentEvent.source->transmitQ.front(); // get the packet to be transmitted from the Q
+                packet newPacket = currentEvent.source->transmitQ.top(); // get the packet to be transmitted from the Q
                 /* New arrival for the destination host */
-                event newArrival = new_event(0, 1, currentEvent.dest, currentEvent.source, newPacket.size, currentTime + (newPacket.size / (11000000 / 8)));
+                event newArrival = new_event(0, 1, currentEvent.dest, currentEvent.source, newPacket.size, newPacket.deadline, currentTime + (newPacket.size / (11000000 / 8)));
                 add_event(newArrival);
                 add_transit(newArrival);
                 currentEvent.source->transmitQ.pop();
@@ -256,7 +265,7 @@ int main()
             else if(inTransitList.size() > 0) {
                 //line is busy
                 //add a channel sense event
-                event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, 0, currentTime + nedt(lambda));
+                event channelEvent = new_event(2, 0, currentEvent.source, currentEvent.dest, 0, 0, currentTime + nedt(lambda));
                 add_event(channelEvent);
             }
             }
@@ -265,8 +274,11 @@ int main()
     }
     
     throughPut = totalBytes/currentTime;
+    deadlineMissratio = deadlineMisses/totalBytes;
     cout << "Throughput" << throughPut << endl;
     cout << "Total bytes Txed" << totalBytes << endl;
+    cout << "Deadlines missed" << deadlineMisses << endl;
+    cout << "Deadline miss ratio" << deadlineMissratio << endl;
     cout << "Dropped bytes" << tx.numDropped << endl;
     return 0;
 }
