@@ -18,19 +18,23 @@ int main()
     cout << "Simulator start" << endl;
     /* Random number seed */
     srand48(time(NULL));
-    double simRunTime = 5000000;
+    double simRunTime = 500000000;
     int simulatorRUNS = 1;
     string fileName;
 
-    vector<double>  tp, dmr, avqd, chNum ;
+    vector<double>  tp, dmr, avqd, chNum;
+    vector<double*> perChanDmr;
     /* variables */
     double currentTime = 0;  //current sim time
     double lastTime = 0;
     double totalPackets = 0;
+    double perChannelTotalPackets[maxChannelNUM] = {0};
     double queueingDelay = 0;
     double deadlineMisses = 0;
+    double perChannelDeadlineMisses[maxChannelNUM] = {0};
     double averageThroughput = 0;
     double averageDeadlineMissRatio = 0;
+    double perChannelAverageDeadlineMissRatio[maxChannelNUM] = {0};
     double averageQueueingDelay = 0;
     int RTChannelNum = 0;
     
@@ -45,12 +49,15 @@ int main()
         cout << RTChannelNum + 1 << " channels active " << endl;
         averageThroughput = 0;
         averageDeadlineMissRatio = 0;
+        perChannelAverageDeadlineMissRatio[maxChannelNUM] = {0};
         averageQueueingDelay = 0;
         for(int runs = 0; runs < simulatorRUNS; runs++) {
             // Clear all data 
             currentTime = 0;
             totalPackets = 0;
+            perChannelTotalPackets[maxChannelNUM] = {0};
             deadlineMisses = 0;
+            perChannelDeadlineMisses[maxChannelNUM] = {0};
             queueingDelay = 0;
             eventList.clear();
 
@@ -75,7 +82,7 @@ int main()
             lastTime = lastEvent.time;
             cout << "start " << lastTime << endl;
             /* Perform the iteration for the given number of packets */
-            while(currentTime < simRunTime) {
+            while(lastTime < simRunTime) {
                 event currentEvent = eventList.front();
                 //cout << "current Event time " << currentEvent.time << endl;
                 //cout << "Event type " << currentEvent.type << endl;
@@ -92,8 +99,7 @@ int main()
                     newPacket.txDelay = (double)newPacket.size*(double)packetDuration; //packets * size is the time taken for Txn
                     newPacket.deadline = currentTime + RTChannelList[newPacket.channelNum].deadLine; 
                     newPacket.arrivalTime = currentEvent.time;
-                    newPacket.priority = newPacket.channelNum < RTChannelNum/2 ? 0 : 1;
-
+                    newPacket.priority = newPacket.channelNum < (RTChannelNum+1)/2 ? 0 : 1; //channel numbers in the first half has more priority
                     /* Create departure event for this packet from the tx */
                     if(currentEvent.source->transmitQ.size() < qBuffMAX) {
                         currentEvent.source->transmitQ.push(newPacket);
@@ -129,8 +135,10 @@ int main()
                             }
                             //cout << " Arrival at " << currentTime << endl;
                             totalPackets += newPacket.size;
+                            perChannelTotalPackets[newPacket.channelNum] += newPacket.size;
                             if(newPacket.deadline < currentTime) { 
                                 deadlineMisses += newPacket.size;
+                                perChannelDeadlineMisses[newPacket.channelNum] += newPacket.size;
                                 queueingDelay += currentTime - newPacket.arrivalTime - newPacket.txDelay;
                             }
                             currentEvent.source->transmitQ.pop();
@@ -144,14 +152,27 @@ int main()
             averageQueueingDelay += queueingDelay;
             averageThroughput += totalPackets/currentTime;
             averageDeadlineMissRatio += deadlineMisses/totalPackets;
+            for(int ii = 0; ii <= RTChannelNum; ii++ ) {
+                perChannelAverageDeadlineMissRatio[ii] += perChannelDeadlineMisses[ii]/perChannelTotalPackets[ii];
+            }
         }
 
         averageThroughput = averageThroughput/simulatorRUNS;
         averageQueueingDelay = averageQueueingDelay/simulatorRUNS;
         averageDeadlineMissRatio = averageDeadlineMissRatio/simulatorRUNS;
+
+        for(int ii = 0; ii <= RTChannelNum; ii++ ) {
+                perChannelAverageDeadlineMissRatio[ii] = perChannelAverageDeadlineMissRatio[ii]/simulatorRUNS;
+        }
+
+        perChanDmr.push_back(perChannelAverageDeadlineMissRatio);
         cout << " Throughput " << averageThroughput << endl;
-        cout << " Queueing delay " << averageQueueingDelay << endl;
-        cout << " Deadline Missratio " << averageDeadlineMissRatio << endl;
+        cout << " Queueing Delay " << averageQueueingDelay << endl;
+        cout << " Deadline Miss Ratio " << averageDeadlineMissRatio << endl;
+        double* ptr = perChanDmr.front();
+        for(int ii = 0; ii <= RTChannelNum; ii++) {
+            cout << " Deadline Miss Ratio " << ii << " " << ptr[ii] << endl;
+        }
         chNum.push_back(RTChannelNum);
         tp.push_back(averageThroughput);
         dmr.push_back(averageDeadlineMissRatio);
@@ -163,6 +184,9 @@ int main()
     plt::save(fileName);
     plt::close();
     plt::plot(chNum, dmr);
+    //for(int ii = 0; ii < maxChannelNUM; ii++ ) {
+    //    plt::plot(chNum, dmrPerChan(ii));
+    //    }
     plt::title(" Number of channels vs Deadline miss ratio");
     fileName = "../images/PQ_" + to_string(maxChannelNUM) + "DMR_chan.png";
     plt::save(fileName);
