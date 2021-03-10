@@ -97,7 +97,7 @@ int main()
                     /* Create departure event for this packet from the tx */
                     if(currentEvent.source->transmitQ.size() < qBuffMAX) {
                         currentEvent.source->transmitQ.push(newPacket);
-                        event newDeparture = new_event(1, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, (currentTime + newPacket.txDelay));
+                        event newDeparture = new_event(1, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime);
                         add_event(newDeparture);
                         //cout << "Added departure" << currentTime << " " << newDeparture.time <<endl;
                         currentTime = newDeparture.time;
@@ -121,7 +121,8 @@ int main()
                         /* rx has received the data */ 
                             currentTime = currentEvent.time;
                             packet newPacket = currentEvent.source->transmitQ.top(); // get the packet to be transmitted from the
-                            //cout << "Last event time " << lastTime <<endl;
+                            currentTime = currentEvent.time + newPacket.txDelay; 
+                            //cout << "Last event time " << lastTime <<endl
                             if(currentTime - lastTime < newPacket.txDelay) {
                                 //cout << "Updating time " << newPacket.txDelay <<endl;
                                 currentTime = lastTime + newPacket.txDelay;
