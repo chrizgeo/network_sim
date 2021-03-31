@@ -59,7 +59,7 @@ int main()
             deadlineMisses = 0;
             perChannelDeadlineMisses[maxChannelNUM] = {0};
             queueingDelay = 0;
-            eventList.clear();
+            FEL.clear();
 
             /* Init the hosts */
             init_host(txPtr);
@@ -68,7 +68,7 @@ int main()
             /* Add to Q the first event, channel 0*/
             event newEvent = new_event(0, 0, txPtr, txPtr, currentTime);
             add_event(newEvent);
-            //cout << "Event list size " << eventList.size() << endl;
+            //cout << "Event list size " << FEL.size() << endl;
             double nextTime = 0;
             for(int ii = 1; ii <= RTChannelNum; ii++) {
                 nextTime = currentTime + nedt(lambda);
@@ -78,15 +78,15 @@ int main()
             }
 
             /* Get the top of the event list and start simulation */
-            event lastEvent =  eventList.front();
+            event lastEvent =  FEL.front();
             lastTime = lastEvent.time;
             cout << "start " << lastTime << endl;
             /* Perform the iteration for the given number of packets */
             while(lastTime < simRunTime) {
-                event currentEvent = eventList.front();
+                event currentEvent = FEL.front();
                 //cout << "current Event time " << currentEvent.time << endl;
                 //cout << "Event type " << currentEvent.type << endl;
-                //cout << "Event list size " << eventList.size() << endl;
+                //cout << "Event list size " << FEL.size() << endl;
                 /* An arrival event */
                 if(currentEvent.type == 0) {
                     currentTime = currentEvent.time;
@@ -145,7 +145,7 @@ int main()
                             lastTime = currentTime;
                             
                 }
-            eventList.pop_front();
+            FEL.pop_front();
             }
             
 

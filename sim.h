@@ -94,7 +94,7 @@ struct event{
 host tx, *txPtr, rx, *rxPtr; 
 
 /* List needed for the simulator */
-list<event> eventList; //store the tx and rx events
+list<event> FEL; //store the tx and rx events
 //list<event> inTransitList; //store the link events
 
 /* Helper function to find Negetive exponentially distributed time */
@@ -127,7 +127,7 @@ void init_channels(void) {
     }
 }
 
-/* returns a new event to add to eventList */
+/* returns a new event to add to FEL */
 event new_event(int type, int rtChannel, host* source, host* dest, double time)
 {
     event newEvent;
@@ -144,17 +144,17 @@ void add_event(event newEvent)
 {
     list<event>::iterator it;
     event lastEvent; //the last event in the list
-    lastEvent = eventList.back(); 
+    lastEvent = FEL.back(); 
     
     if(newEvent.time < lastEvent.time) {
-        for(it = eventList.begin(); it != eventList.end(); it++) {
+        for(it = FEL.begin(); it != FEL.end(); it++) {
             if(newEvent.time < (it->time)) {
-                eventList.insert(it, newEvent);
+                FEL.insert(it, newEvent);
                 break;
             }           
         }
     }
     else {
-        eventList.push_back(newEvent);
+        FEL.push_back(newEvent);
     }
 }
