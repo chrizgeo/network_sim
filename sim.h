@@ -1,5 +1,4 @@
 #include<iostream>
-#include<iostream>
 #include<queue>
 #include<list>
 #include<ctime>
@@ -7,6 +6,8 @@
 #include<fstream>
 using namespace std;
 
+//comment this to use FCFS Q
+#define PRIORITY_Q
 /* The maximum number of realtime channels. */
 const int maxChannelNUM = 16;
 /* Number of times to run the simulator events to get an average value */
@@ -35,6 +36,7 @@ struct packet{
     int channelNum;  //RT channel for the packet 
     double txDelay;
     int priority;
+#ifdef PRIORITY_Q
     /* overload < for prioirty Q to compare priorities of the channel*/
     bool operator<(const packet &rhs)const
     {
@@ -56,9 +58,10 @@ struct packet{
         else {
             return false;
         }
-    }  
+    }
+#else
     /* overload < for prioirty Q to compare the deadlines of the channel*/
-/*     bool operator<(const packet &rhs)const
+    bool operator<(const packet &rhs)const
     {
         if(deadline > rhs.deadline) {
             return true;
@@ -72,7 +75,8 @@ struct packet{
         else {
             return false;
         }
-    }  */
+    }
+#endif
 
 };
 
