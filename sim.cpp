@@ -18,32 +18,34 @@ int main()
     cout << "Simulator start" << endl;
     /* Random number seed */
     srand48(time(NULL));
-    double simRunTime = 500000000;
-    int simulatorRUNS = 1;
+    unsigned long long int simRunTime = 100000;
     string fileName;
 
     vector<double>  tp, dmr, avqd, chNum;
     vector<double*> perChanDmr;
     /* variables */
-    double currentTime = 0;  //current sim time
-    double lastTime = 0;
-    double totalPackets = 0;
-    double perChannelTotalPackets[maxChannelNUM] = {0};
-    double queueingDelay = 0;
-    double deadlineMisses = 0;
-    double perChannelDeadlineMisses[maxChannelNUM] = {0};
-    double averageThroughput = 0;
-    double averageDeadlineMissRatio = 0;
-    double perChannelAverageDeadlineMissRatio[maxChannelNUM] = {0};
-    double averageQueueingDelay = 0;
+    /* simulator variables */
+    unsigned long long int currentTime = 0;  //current sim time
+    int lineBusy = 0;
+    unsigned int waitTime = 0;
     int RTChannelNum = 0;
-    
-    /* Init the hosts */
     txPtr = &tx;
     rxPtr = &rx;
 
+    /* Statistics variables */
+    unsigned long long int totalPackets = 0; //total number of packets txd
+    unsigned long long int perChannelTotalPackets[maxChannelNUM] = {0}; //total number of packets sent per channel
+    unsigned long long int queueingDelay = 0; //total queing delay
+    unsigned long long int deadlineMisses = 0; // total number of packets which missed deadlines
+    unsigned long long int perChannelDeadlineMisses[maxChannelNUM] = {0}; //total number of packets which missed deadlines for each channel
+    double averageThroughput = 0;
+    double averageDeadlineMissRatio = 0;
+    double perChannelAverageDeadlineMissRatio[maxChannelNUM] = {0};
+    unsigned long long int averageQueueingDelay = 0;
+
     /* Init channels */
     init_channels();
+    
     /* Each run of the simulation */
     for(RTChannelNum = 0; RTChannelNum < maxChannelNUM; RTChannelNum++) {
         cout << RTChannelNum + 1 << " channels active " << endl;
@@ -59,6 +61,8 @@ int main()
             deadlineMisses = 0;
             perChannelDeadlineMisses[maxChannelNUM] = {0};
             queueingDelay = 0;
+
+            lineBusy = 0;
             FEL.clear();
 
             /* Init the hosts */
@@ -71,7 +75,7 @@ int main()
             //cout << "Event list size " << FEL.size() << endl;
             double nextTime = 0;
             for(int ii = 1; ii <= RTChannelNum; ii++) {
-                nextTime = currentTime + nedt(lambda);
+                nextTime = currentTime; //+ nedt(lambda);
                 event newEvent = new_event(0, ii, txPtr, txPtr, nextTime);
                 add_event(newEvent);
                 currentTime = nextTime;
@@ -79,17 +83,16 @@ int main()
 
             /* Get the top of the event list and start simulation */
             event lastEvent =  FEL.front();
-            lastTime = lastEvent.time;
-            cout << "start " << lastTime << endl;
+            cout << "start " << lastEvent.time << endl;
             /* Perform the iteration for the given number of packets */
-            while(lastTime < simRunTime) {
+            while(currentTime < simRunTime) {
                 event currentEvent = FEL.front();
                 //cout << "current Event time " << currentEvent.time << endl;
                 //cout << "Event type " << currentEvent.type << endl;
                 //cout << "Event list size " << FEL.size() << endl;
                 /* An arrival event */
+                currentTime = currentEvent.time;
                 if(currentEvent.type == 0) {
-                    currentTime = currentEvent.time;
                     //cout << currentTime << endl;
                     /* Arrival at the Tx, add to transmitQ */
                     /* Create new packet */
@@ -103,12 +106,10 @@ int main()
                     /* Create departure event for this packet from the tx */
                     if(currentEvent.source->transmitQ.size() < qBuffMAX) {
                         currentEvent.source->transmitQ.push(newPacket);
-                        event newDeparture = new_event(1, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime);
+                        event newDeparture = new_event(2, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime);
                         add_event(newDeparture);
                         //cout << "Added departure" << currentTime << " " << newDeparture.time <<endl;
-                        currentTime = newDeparture.time;
                         
-                        //queueingDelay += currentTime - newPacket.arrivalTime;
                     }
 
                     else {
@@ -121,28 +122,37 @@ int main()
                     add_event(newArrival);
                     //cout << "Added new packet gen for " << currentEvent.rtChannel << " at " << newArrival.time << endl;
                 }
+                else if(currentEvent.type == 2) 
+                {
+                    if(!lineBusy) {
+                        packet topPacket = currentEvent.source->transmitQ.top();
+                        event newSent = new_event(1, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime+topPacket.txDelay);
+                        add_event(newSent);
+                        queueingDelay += newSent.time - topPacket.arrivalTime;
+                        waitTime = topPacket.txDelay;
+                        //cout << "Sent packet " << endl;
+                        lineBusy = 1;
+                    }
+                    else {
+                        event newWaiting = new_event(2, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime+waitTime);
+                        add_event(newWaiting);
+                        //cout << "New waiting event " << currentTime+125 << endl;
+                    }
+                }
                 /*receive event */
                 else if(currentEvent.type == 1) {
                     //TODO update Q time data
                         /* rx has received the data */ 
-                            currentTime = currentEvent.time;
                             packet newPacket = currentEvent.source->transmitQ.top(); // get the packet to be transmitted from the
-                            currentTime = currentEvent.time + newPacket.txDelay; 
-                            //cout << "Last event time " << lastTime <<endl
-                            if(currentTime - lastTime < newPacket.txDelay) {
-                                //cout << "Updating time " << newPacket.txDelay <<endl;
-                                currentTime = lastTime + newPacket.txDelay;
-                            }
-                            //cout << " Arrival at " << currentTime << endl;
                             totalPackets += newPacket.size;
                             perChannelTotalPackets[newPacket.channelNum] += newPacket.size;
                             if(newPacket.deadline < currentTime) { 
                                 deadlineMisses += newPacket.size;
                                 perChannelDeadlineMisses[newPacket.channelNum] += newPacket.size;
-                                queueingDelay += currentTime - newPacket.arrivalTime - newPacket.txDelay;
                             }
                             currentEvent.source->transmitQ.pop();
-                            lastTime = currentTime;
+                            //cout << "Received packet " << endl;
+                            lineBusy = 0;
                             
                 }
             FEL.pop_front();
@@ -150,8 +160,9 @@ int main()
             
 
             averageQueueingDelay += queueingDelay;
-            averageThroughput += totalPackets/currentTime;
-            averageDeadlineMissRatio += deadlineMisses/totalPackets;
+            averageThroughput += (double)totalPackets/(double)currentTime;
+            cout << "Deadline misses " << deadlineMisses << " total packets " << totalPackets << endl;
+            averageDeadlineMissRatio += (double)deadlineMisses/(double)totalPackets;
             for(int ii = 0; ii <= RTChannelNum; ii++ ) {
                 perChannelAverageDeadlineMissRatio[ii] += perChannelDeadlineMisses[ii]/perChannelTotalPackets[ii];
             }
