@@ -17,12 +17,12 @@ long unsigned int qBuffMAX = 10000000;   //max number of packets to keep in Q
 
 double lambda	= .001; //to get some kind of uncertainity for RTC channel transmission start
 
-int packetDuration = 125; //corresponding to a bitrate of 64Mbps for 1 packet of one byte 
+unsigned int packetDuration = 125; //corresponding to a bitrate of 64Mbps for 1 packet of one byte 
 
 struct channel{
     int priority;
-    int period;
-    int deadLine;
+    unsigned int period;
+    unsigned int deadLine;
     int capacity;
 };
 
@@ -31,10 +31,10 @@ channel RTChannelList[maxChannelNUM];
 
 struct packet{
     int size; //packet size
-    double arrivalTime;
-    double deadline; //the deadline of this packet
+    unsigned long long int arrivalTime;
+    unsigned long long int deadline; //the deadline of this packet
     int channelNum;  //RT channel for the packet 
-    double txDelay;
+    unsigned int txDelay;
     int priority;
 #ifdef PRIORITY_Q
     /* overload < for prioirty Q to compare priorities of the channel*/
@@ -82,7 +82,7 @@ struct packet{
 
 struct host{ 
     priority_queue<packet> transmitQ; // Q at the host
-    float numDropped; // number of dropped packets
+    unsigned long long int numDropped; // number of dropped packets
 
 };
 
@@ -91,7 +91,7 @@ struct event{
     int rtChannel; // 0 for queue to tx 1 for tx to rx
     host *source; //source of the event
     host *dest; //destination of the event
-    double time; // time of the event
+    unsigned long long int time; // time of the event
 };
 
 /* create sender and receiver hosts */
@@ -132,7 +132,7 @@ void init_channels(void) {
 }
 
 /* returns a new event to add to FEL */
-event new_event(int type, int rtChannel, host* source, host* dest, double time)
+event new_event(int type, int rtChannel, host* source, host* dest, unsigned long long int time)
 {
     event newEvent;
     newEvent.type = type;
