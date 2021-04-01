@@ -9,9 +9,9 @@ using namespace std;
 //comment this to use FCFS Q
 #define PRIORITY_Q
 /* The maximum number of realtime channels. */
-const int maxChannelNUM = 16;
+const int maxChannelNUM = 30;
 /* Number of times to run the simulator events to get an average value */
-int simulatorRUNS = 5;
+int simulatorRUNS = 200;
 /* constants */
 long unsigned int qBuffMAX = 10000000;   //max number of packets to keep in Q
 
@@ -139,7 +139,12 @@ event new_event(int type, int rtChannel, host* source, host* dest, unsigned long
     newEvent.rtChannel = rtChannel;
     newEvent.source = source;
     newEvent.dest = dest;
-    newEvent.time = time;
+    if(type == 1) {
+        newEvent.time = time + (int)nedt(0.01);
+    }
+    else {
+        newEvent.time = time;
+    }
     return newEvent;
 }
 
