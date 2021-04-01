@@ -18,8 +18,9 @@ int main()
     cout << "Simulator start" << endl;
     /* Random number seed */
     srand48(time(NULL));
-    unsigned long long int simRunTime = 100000;
+    unsigned long long int simRunTime = 150000;
     string fileName;
+    string fileRoot;
 
     vector<double>  tp, dmr, avqd, chNum;
     vector<double*> perChanDmr;
@@ -29,6 +30,7 @@ int main()
     int lineBusy = 0;
     unsigned int waitTime = 0;
     int RTChannelNum = 0;
+    int maxAcceptedChannels = maxChannelNUM;
     txPtr = &tx;
     rxPtr = &rx;
 
@@ -39,15 +41,33 @@ int main()
     unsigned long long int deadlineMisses = 0; // total number of packets which missed deadlines
     unsigned long long int perChannelDeadlineMisses[maxChannelNUM] = {0}; //total number of packets which missed deadlines for each channel
     double averageThroughput = 0;
+    double averageUtilisation = 0;
     double averageDeadlineMissRatio = 0;
     double perChannelAverageDeadlineMissRatio[maxChannelNUM] = {0};
     unsigned long long int averageQueueingDelay = 0;
 
     /* Init channels */
     init_channels();
+    /* Find max acceptable channels */
+/*     for(RTChannelNum = 0; RTChannelNum < maxChannelNUM; RTChannelNum++) {
+        double utilisation = 0;
+        //cout << "Utilisation " << utilisation << endl;
+        for(int i = 0; i<RTChannelNum; i++) {
+            utilisation += (double)(RTChannelList[i].capacity*packetDuration)/(double)RTChannelList[i].period;
+            //cout << "Utilisation " << utilisation << endl;
+            if(utilisation >= 1.0)  {
+                maxAcceptedChannels = RTChannelNum - 1 ;
+                break;
+            }
+        }
+        
+        if(maxAcceptedChannels) break;
+        cout << endl;
+    } */
     
+    cout << "Maximum   " << maxAcceptedChannels << "    " << " accepted " << endl;
     /* Each run of the simulation */
-    for(RTChannelNum = 0; RTChannelNum < maxChannelNUM; RTChannelNum++) {
+    for(RTChannelNum = 0; RTChannelNum < maxAcceptedChannels; RTChannelNum++) {
         cout << RTChannelNum + 1 << " channels active " << endl;
         averageThroughput = 0;
         averageDeadlineMissRatio = 0;
@@ -75,7 +95,7 @@ int main()
             //cout << "Event list size " << FEL.size() << endl;
             double nextTime = 0;
             for(int ii = 1; ii <= RTChannelNum; ii++) {
-                nextTime = currentTime; //+ nedt(lambda);
+                nextTime = currentTime + (int)nedt(lambda);
                 event newEvent = new_event(0, ii, txPtr, txPtr, nextTime);
                 add_event(newEvent);
                 currentTime = nextTime;
@@ -83,7 +103,7 @@ int main()
 
             /* Get the top of the event list and start simulation */
             event lastEvent =  FEL.front();
-            cout << "start " << lastEvent.time << endl;
+            //cout << "start " << lastEvent.time << endl;
             /* Perform the iteration for the given number of packets */
             while(currentTime < simRunTime) {
                 event currentEvent = FEL.front();
@@ -128,7 +148,8 @@ int main()
                         packet topPacket = currentEvent.source->transmitQ.top();
                         event newSent = new_event(1, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime+topPacket.txDelay);
                         add_event(newSent);
-                        queueingDelay += newSent.time - topPacket.arrivalTime;
+                        //cout << "Queueing delay " << queueingDelay << endl;
+                        queueingDelay += currentTime - topPacket.arrivalTime;
                         waitTime = topPacket.txDelay;
                         //cout << "Sent packet " << endl;
                         lineBusy = 1;
@@ -151,7 +172,6 @@ int main()
                                 perChannelDeadlineMisses[newPacket.channelNum] += newPacket.size;
                             }
                             currentEvent.source->transmitQ.pop();
-                            //cout << "Received packet " << endl;
                             lineBusy = 0;
                             
                 }
@@ -161,7 +181,7 @@ int main()
 
             averageQueueingDelay += queueingDelay;
             averageThroughput += (double)totalPackets/(double)currentTime;
-            cout << "Deadline misses " << deadlineMisses << " total packets " << totalPackets << endl;
+            //cout << "Deadline misses " << deadlineMisses << " total packets " << totalPackets << endl;
             averageDeadlineMissRatio += (double)deadlineMisses/(double)totalPackets;
             for(int ii = 0; ii <= RTChannelNum; ii++ ) {
                 perChannelAverageDeadlineMissRatio[ii] += perChannelDeadlineMisses[ii]/perChannelTotalPackets[ii];
@@ -189,6 +209,7 @@ int main()
         dmr.push_back(averageDeadlineMissRatio);
         avqd.push_back(averageQueueingDelay);
     }
+
     plt::plot(chNum, tp);
     plt::title("Number of channels vs throughput");
     fileName = "../images/PQ_" + to_string(maxChannelNUM) + "tp_chan.png";
