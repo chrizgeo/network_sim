@@ -7,6 +7,7 @@
 //TODO add file and  plot the throughput for many number of simulations
 #include "sim.h"
 #include "matplotlibcpp.h"
+//#include<fstream>
 
 namespace plt = matplotlibcpp;
 
@@ -18,11 +19,19 @@ int main()
     cout << "Simulator start" << endl;
     /* Random number seed */
     srand48(time(NULL));
-    unsigned long long int simRunTime = 150000;
-    string fileName;
-    string fileRoot;
 
-    vector<double>  tp, dmr, avqd, chNum;
+    //ofStream statsFile;
+    //statsFile.open("statistics.csv");
+    string fileName;
+
+    string fileRoot;
+    #ifdef PRIORITY_Q 
+    fileRoot = "../images/PQ_";
+    #else
+    fileRoot = "../images/FCFSQ_";
+    #endif 
+
+    vector<double>  tp, ut, dmr, avqd, chNum;
     vector<double*> perChanDmr;
     /* variables */
     /* simulator variables */
@@ -35,11 +44,12 @@ int main()
     rxPtr = &rx;
 
     /* Statistics variables */
-    unsigned long long int totalPackets = 0; //total number of packets txd
-    unsigned long long int perChannelTotalPackets[maxChannelNUM] = {0}; //total number of packets sent per channel
+    unsigned long long int totalPackets = 1; //total number of packets txd
+    unsigned long long int perChannelTotalPackets[maxChannelNUM] = {}; //total number of packets sent per channel
     unsigned long long int queueingDelay = 0; //total queing delay
     unsigned long long int deadlineMisses = 0; // total number of packets which missed deadlines
     unsigned long long int perChannelDeadlineMisses[maxChannelNUM] = {0}; //total number of packets which missed deadlines for each channel
+    unsigned long long int txTime = 0;
     double averageThroughput = 0;
     double averageUtilisation = 0;
     double averageDeadlineMissRatio = 0;
@@ -71,17 +81,21 @@ int main()
         cout << RTChannelNum + 1 << " channels active " << endl;
         averageThroughput = 0;
         averageDeadlineMissRatio = 0;
+        averageUtilisation = 0;
         perChannelAverageDeadlineMissRatio[maxChannelNUM] = {0};
         averageQueueingDelay = 0;
+        /* clear per channel data */
+        for(int i = 0; i <= RTChannelNum; i++) {
+            perChannelTotalPackets[i] = 1;
+            perChannelDeadlineMisses[i] = 0;
+        }
         for(int runs = 0; runs < simulatorRUNS; runs++) {
             // Clear all data 
             currentTime = 0;
-            totalPackets = 0;
-            perChannelTotalPackets[maxChannelNUM] = {0};
+            totalPackets = 1;
             deadlineMisses = 0;
-            perChannelDeadlineMisses[maxChannelNUM] = {0};
             queueingDelay = 0;
-
+            txTime = 0;
             lineBusy = 0;
             FEL.clear();
 
@@ -167,18 +181,18 @@ int main()
                             packet newPacket = currentEvent.source->transmitQ.top(); // get the packet to be transmitted from the
                             totalPackets += newPacket.size;
                             perChannelTotalPackets[newPacket.channelNum] += newPacket.size;
+                            txTime += newPacket.txDelay;
                             if(newPacket.deadline < currentTime) { 
                                 deadlineMisses += newPacket.size;
                                 perChannelDeadlineMisses[newPacket.channelNum] += newPacket.size;
                             }
                             currentEvent.source->transmitQ.pop();
                             lineBusy = 0;
-                            
-                }
+                        }
             FEL.pop_front();
             }
             
-
+            averageUtilisation += (double)txTime/(double)currentTime;
             averageQueueingDelay += queueingDelay;
             averageThroughput += (double)totalPackets/(double)currentTime;
             //cout << "Deadline misses " << deadlineMisses << " total packets " << totalPackets << endl;
@@ -189,6 +203,8 @@ int main()
         }
 
         averageThroughput = averageThroughput/simulatorRUNS;
+        averageUtilisation = averageUtilisation/simulatorRUNS;
+        averageQueueingDelay = averageQueueingDelay; ///(double)US_IN_S;
         averageQueueingDelay = averageQueueingDelay/simulatorRUNS;
         averageDeadlineMissRatio = averageDeadlineMissRatio/simulatorRUNS;
 
@@ -198,6 +214,7 @@ int main()
 
         perChanDmr.push_back(perChannelAverageDeadlineMissRatio);
         cout << " Throughput " << averageThroughput << endl;
+        cout << " Utilisation " << averageUtilisation << endl;
         cout << " Queueing Delay " << averageQueueingDelay << endl;
         cout << " Deadline Miss Ratio " << averageDeadlineMissRatio << endl;
         double* ptr = perChanDmr.front();
@@ -206,26 +223,36 @@ int main()
         }
         chNum.push_back(RTChannelNum);
         tp.push_back(averageThroughput);
+        ut.push_back(averageUtilisation);
         dmr.push_back(averageDeadlineMissRatio);
         avqd.push_back(averageQueueingDelay);
     }
 
-    plt::plot(chNum, tp);
+    /* Plot throughput */
+/*     plt::plot(chNum, tp);
     plt::title("Number of channels vs throughput");
-    fileName = "../images/PQ_" + to_string(maxChannelNUM) + "tp_chan.png";
+    fileName = fileRoot + to_string(maxChannelNUM) + "tp_chan.png";
+    plt::save(fileName);
+    plt::close(); */
+    /* Plot utilisation */
+    plt::plot(chNum, ut);
+    plt::title("Number of channels vs utilisation ");
+    fileName = fileRoot + to_string(maxChannelNUM) + "ut_chan.png";
     plt::save(fileName);
     plt::close();
+    /* Plot deadline miss ratio */
     plt::plot(chNum, dmr);
     //for(int ii = 0; ii < maxChannelNUM; ii++ ) {
     //    plt::plot(chNum, dmrPerChan(ii));
     //    }
     plt::title(" Number of channels vs Deadline miss ratio");
-    fileName = "../images/PQ_" + to_string(maxChannelNUM) + "DMR_chan.png";
+    fileName = fileRoot + to_string(maxChannelNUM) + "DMR_chan.png";
     plt::save(fileName);
     plt::close();
+    /* Plot average qing delay */
     plt::plot(chNum, avqd);
     plt::title(" Number of channels vs Average Queueing Delay");
-    fileName = "../images/PQ_" + to_string(maxChannelNUM) + "AQD_chan.png";
+    fileName = fileRoot + to_string(maxChannelNUM) + "AQD_chan.png";
     plt::save(fileName);
     plt::close();
     return 0;

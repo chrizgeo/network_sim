@@ -3,15 +3,16 @@
 #include<list>
 #include<ctime>
 #include<cmath>
-#include<fstream>
 using namespace std;
 
 //comment this to use FCFS Q
-#define PRIORITY_Q
+//#define PRIORITY_Q
+#define US_IN_S 1000000
 /* The maximum number of realtime channels. */
 const int maxChannelNUM = 30;
 /* Number of times to run the simulator events to get an average value */
-int simulatorRUNS = 200;
+int simulatorRUNS = 25;
+unsigned long long int simRunTime = 150000;
 /* constants */
 long unsigned int qBuffMAX = 10000000;   //max number of packets to keep in Q
 
@@ -140,7 +141,7 @@ event new_event(int type, int rtChannel, host* source, host* dest, unsigned long
     newEvent.source = source;
     newEvent.dest = dest;
     if(type == 1) {
-        newEvent.time = time + (int)nedt(0.01);
+        newEvent.time = time; //+ (int)nedt(0.01);
     }
     else {
         newEvent.time = time;
