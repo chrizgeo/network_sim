@@ -6,10 +6,9 @@
 */
 //TODO add file and  plot the throughput for many number of simulations
 #include "sim.h"
-#include "matplotlibcpp.h"
-//#include<fstream>
 
-namespace plt = matplotlibcpp;
+#include <iostream>
+#include <fstream>
 
 using namespace std;
 
@@ -20,19 +19,19 @@ int main()
     /* Random number seed */
     srand48(time(NULL));
 
-    //ofStream statsFile;
-    //statsFile.open("statistics.csv");
-    string fileName;
+    ofstream statsFile;
 
+    string fileName;
+    int qMethod = 0;
     string fileRoot;
     #ifdef PRIORITY_Q 
     fileRoot = "../images/PQ_";
+    qMethod = 1;
     #else
     fileRoot = "../images/FCFSQ_";
+    qMethod = 0;
     #endif 
 
-    vector<double>  tp, ut, dmr, avqd, chNum;
-    vector<double*> perChanDmr;
     /* variables */
     /* simulator variables */
     unsigned long long int currentTime = 0;  //current sim time
@@ -198,7 +197,7 @@ int main()
             //cout << "Deadline misses " << deadlineMisses << " total packets " << totalPackets << endl;
             averageDeadlineMissRatio += (double)deadlineMisses/(double)totalPackets;
             for(int ii = 0; ii <= RTChannelNum; ii++ ) {
-                perChannelAverageDeadlineMissRatio[ii] += perChannelDeadlineMisses[ii]/perChannelTotalPackets[ii];
+                perChannelAverageDeadlineMissRatio[ii] += (double)perChannelDeadlineMisses[ii]/(double)perChannelTotalPackets[ii];
             }
         }
 
@@ -212,49 +211,28 @@ int main()
                 perChannelAverageDeadlineMissRatio[ii] = perChannelAverageDeadlineMissRatio[ii]/simulatorRUNS;
         }
 
-        perChanDmr.push_back(perChannelAverageDeadlineMissRatio);
+        
         cout << " Throughput " << averageThroughput << endl;
         cout << " Utilisation " << averageUtilisation << endl;
         cout << " Queueing Delay " << averageQueueingDelay << endl;
         cout << " Deadline Miss Ratio " << averageDeadlineMissRatio << endl;
-        double* ptr = perChanDmr.front();
-        for(int ii = 0; ii <= RTChannelNum; ii++) {
-            cout << " Deadline Miss Ratio " << ii << " " << ptr[ii] << endl;
+
+        ofstream statsFile;
+        statsFile.open("statistics.csv", std::ios_base::app);
+        if(statsFile.is_open()) {
+            statsFile<<qMethod<<","<<RTChannelNum<<","<<averageThroughput<<","<<averageUtilisation<<","<<averageQueueingDelay<<","<<averageDeadlineMissRatio;
+            for(int ii = 0; ii < maxAcceptedChannels; ii++) {
+                cout << " Deadline Miss Ratio " << ii << " " << perChannelAverageDeadlineMissRatio[ii] << endl;
+                statsFile<<","<<perChannelAverageDeadlineMissRatio[ii]; 
+            }
+            statsFile<<endl;    
+            statsFile.close();
         }
-        chNum.push_back(RTChannelNum);
-        tp.push_back(averageThroughput);
-        ut.push_back(averageUtilisation);
-        dmr.push_back(averageDeadlineMissRatio);
-        avqd.push_back(averageQueueingDelay);
+        else {
+            cout << "Unable to open file" << endl;
+        }
     }
 
-    /* Plot throughput */
-/*     plt::plot(chNum, tp);
-    plt::title("Number of channels vs throughput");
-    fileName = fileRoot + to_string(maxChannelNUM) + "tp_chan.png";
-    plt::save(fileName);
-    plt::close(); */
-    /* Plot utilisation */
-    plt::plot(chNum, ut);
-    plt::title("Number of channels vs utilisation ");
-    fileName = fileRoot + to_string(maxChannelNUM) + "ut_chan.png";
-    plt::save(fileName);
-    plt::close();
-    /* Plot deadline miss ratio */
-    plt::plot(chNum, dmr);
-    //for(int ii = 0; ii < maxChannelNUM; ii++ ) {
-    //    plt::plot(chNum, dmrPerChan(ii));
-    //    }
-    plt::title(" Number of channels vs Deadline miss ratio");
-    fileName = fileRoot + to_string(maxChannelNUM) + "DMR_chan.png";
-    plt::save(fileName);
-    plt::close();
-    /* Plot average qing delay */
-    plt::plot(chNum, avqd);
-    plt::title(" Number of channels vs Average Queueing Delay");
-    fileName = fileRoot + to_string(maxChannelNUM) + "AQD_chan.png";
-    plt::save(fileName);
-    plt::close();
     return 0;
 
 }
