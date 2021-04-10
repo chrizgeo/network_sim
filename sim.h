@@ -11,7 +11,7 @@ using namespace std;
 /* The maximum number of realtime channels. */
 const int maxChannelNUM = 30;
 /* Number of times to run the simulator events to get an average value */
-int simulatorRUNS = 25;
+int simulatorRUNS = 50;
 unsigned long long int simRunTime = 150000;
 /* constants */
 long unsigned int qBuffMAX = 10000000;   //max number of packets to keep in Q

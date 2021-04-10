@@ -24,13 +24,13 @@ int main()
     string fileName;
     int qMethod = 0;
     string fileRoot;
-    #ifdef PRIORITY_Q 
+/*     #ifdef PRIORITY_Q 
     fileRoot = "../images/PQ_";
     qMethod = 1;
     #else
     fileRoot = "../images/FCFSQ_";
     qMethod = 0;
-    #endif 
+    #endif  */
 
     /* variables */
     /* simulator variables */
@@ -220,7 +220,7 @@ int main()
         ofstream statsFile;
         statsFile.open("statistics.csv", std::ios_base::app);
         if(statsFile.is_open()) {
-            statsFile<<qMethod<<","<<RTChannelNum<<","<<averageThroughput<<","<<averageUtilisation<<","<<averageQueueingDelay<<","<<averageDeadlineMissRatio;
+            statsFile<<qMethod<<","<<RTChannelNum<<","<<RTChannelList[RTChannelNum].period<<","<<RTChannelList[RTChannelNum].deadLine<<","<<RTChannelList[RTChannelNum].capacity<<","<<averageThroughput<<","<<averageUtilisation<<","<<averageQueueingDelay<<","<<averageDeadlineMissRatio;
             for(int ii = 0; ii < maxAcceptedChannels; ii++) {
                 cout << " Deadline Miss Ratio " << ii << " " << perChannelAverageDeadlineMissRatio[ii] << endl;
                 statsFile<<","<<perChannelAverageDeadlineMissRatio[ii]; 
