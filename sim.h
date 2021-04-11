@@ -8,11 +8,17 @@ using namespace std;
 //comment this to use FCFS Q
 //#define PRIORITY_Q
 #define US_IN_S 1000000
+
 /* The maximum number of realtime channels. */
 const int maxChannelNUM = 30;
 /* Number of times to run the simulator events to get an average value */
-int simulatorRUNS = 50;
-unsigned long long int simRunTime = 150000;
+const int simulatorRUNS = 55;
+const unsigned long long int simRunTime = 150000;
+
+int maxAcceptedChannels = maxChannelNUM;
+int PERIOD = 5000;
+int DEADLINE = 5000;
+
 /* constants */
 long unsigned int qBuffMAX = 10000000;   //max number of packets to keep in Q
 
@@ -28,7 +34,6 @@ struct channel{
 };
 
 channel RTChannelList[maxChannelNUM];
-
 
 struct packet{
     int size; //packet size
@@ -81,6 +86,7 @@ struct packet{
 
 };
 
+
 struct host{ 
     priority_queue<packet> transmitQ; // Q at the host
     unsigned long long int numDropped; // number of dropped packets
@@ -120,12 +126,12 @@ void init_host(host* hostPtr)
 }
 
 /* Init RT channels */
-void init_channels(void) {
+void init_channels(int period, int deadline) {
     // WE have a priority distribution of 1 for each channel 
     for(int i = 0; i < maxChannelNUM; i++) {
         RTChannelList[i].priority = i;
-        RTChannelList[i].period = 5000;
-        RTChannelList[i].deadLine = 5000;
+        RTChannelList[i].period = period;
+        RTChannelList[i].deadLine = deadline;
         RTChannelList[i].capacity = ((rand() % 4) + 1);
         cout << "Channel num " << i << " Priority " << RTChannelList[i].priority << endl;
         cout << " Period " << RTChannelList[i].period << " Deadline " << RTChannelList[i].deadLine << " Capacity " << RTChannelList[i].capacity << endl;
