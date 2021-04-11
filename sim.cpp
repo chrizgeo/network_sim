@@ -9,28 +9,57 @@
 
 #include <iostream>
 #include <fstream>
+#include <stdexcept>
+#include <string>
 
 using namespace std;
 
 /* Main function */
-int main()
+int main(int argc, char* argv[])
 {
+    if(argc==1)
+        cout<<"No Arguments Passed- Using defaults for period and deadline"<<endl;
+    if(argc>=2)
+    {
+        cout<<argc<<" Arguments Passed: "<<endl;
+
+        string arg = argv[1];
+        try {
+            size_t pos;
+            int PERIOD = stoi(arg, &pos);
+            if (pos < arg.size()) {
+                cerr << "Trailing characters after number: " << arg << '\n';
+            }
+        } catch (invalid_argument const &ex) {
+            cerr << "Invalid number: " << arg << '\n';
+        } catch (out_of_range const &ex) {
+            cerr << "Number out of range: " << arg << '\n';
+        }
+
+        arg = argv[2];
+        try {
+            size_t pos;
+            int DEADLINE = stoi(arg, &pos);
+            if (pos < arg.size()) {
+                cerr << "Trailing characters after number: " << arg << '\n';
+            }
+        } catch (invalid_argument const &ex) {
+            cerr << "Invalid number: " << arg << '\n';
+        } catch (out_of_range const &ex) {
+            cerr << "Number out of range: " << arg << '\n';
+        }
+    }
     cout << "Simulator start" << endl;
     /* Random number seed */
     srand48(time(NULL));
 
     ofstream statsFile;
 
-    string fileName;
-    int qMethod = 0;
-    string fileRoot;
-/*     #ifdef PRIORITY_Q 
-    fileRoot = "../images/PQ_";
-    qMethod = 1;
+    #ifdef PRIORITY_Q 
+    char const *qMethod = "PRIO";
     #else
-    fileRoot = "../images/FCFSQ_";
-    qMethod = 0;
-    #endif  */
+    char const *qMethod = "FCFS";
+    #endif  
 
     /* variables */
     /* simulator variables */
@@ -38,7 +67,7 @@ int main()
     int lineBusy = 0;
     unsigned int waitTime = 0;
     int RTChannelNum = 0;
-    int maxAcceptedChannels = maxChannelNUM;
+
     txPtr = &tx;
     rxPtr = &rx;
 
@@ -56,7 +85,7 @@ int main()
     unsigned long long int averageQueueingDelay = 0;
 
     /* Init channels */
-    init_channels();
+    init_channels(PERIOD, DEADLINE);
     /* Find max acceptable channels */
 /*     for(RTChannelNum = 0; RTChannelNum < maxChannelNUM; RTChannelNum++) {
         double utilisation = 0;
