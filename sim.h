@@ -1,3 +1,5 @@
+#ifndef NET_SIM_H
+#define NET_SIM_H 
 #include<iostream>
 #include<queue>
 #include<list>
@@ -174,3 +176,4 @@ void add_event(event newEvent)
         FEL.push_back(newEvent);
     }
 }
+#endif
