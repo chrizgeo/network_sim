@@ -4,19 +4,24 @@
     Christo George<chrizgeo@gmail.com>
     Feb 2021
 */
-//TODO add file and  plot the throughput for many number of simulations
+
 #include "sim.h"
 
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
 #include <string>
-
+#include <cstdio>
+#include <chrono>
+#include <ctime>
 using namespace std;
 
 /* Main function */
 int main(int argc, char* argv[])
 {
+    freopen( "log.log", "w", stdout );
+    time_t startTime = chrono::system_clock::to_time_t(chrono::system_clock::now());
+    cout << " Program start at " << ctime(&startTime) <<endl;
     if(argc==1)
         cout<<"No Arguments Passed- Using defaults for period and deadline"<<endl;
     if(argc>=2)
@@ -26,7 +31,7 @@ int main(int argc, char* argv[])
         string arg = argv[1];
         try {
             size_t pos;
-            int PERIOD = stoi(arg, &pos);
+            PERIOD = stoi(arg, &pos);
             if (pos < arg.size()) {
                 cerr << "Trailing characters after number: " << arg << '\n';
             }
@@ -39,7 +44,7 @@ int main(int argc, char* argv[])
         arg = argv[2];
         try {
             size_t pos;
-            int DEADLINE = stoi(arg, &pos);
+            DEADLINE = stoi(arg, &pos);
             if (pos < arg.size()) {
                 cerr << "Trailing characters after number: " << arg << '\n';
             }
@@ -85,6 +90,7 @@ int main(int argc, char* argv[])
     unsigned long long int averageQueueingDelay = 0;
 
     /* Init channels */
+    cout << PERIOD << " " << DEADLINE <<  endl;
     init_channels(PERIOD, DEADLINE);
     /* Find max acceptable channels */
 /*     for(RTChannelNum = 0; RTChannelNum < maxChannelNUM; RTChannelNum++) {
@@ -126,7 +132,7 @@ int main(int argc, char* argv[])
             txTime = 0;
             lineBusy = 0;
             FEL.clear();
-
+            //cout << txTime << endl;
             /* Init the hosts */
             init_host(txPtr);
             init_host(rxPtr);
@@ -145,6 +151,8 @@ int main(int argc, char* argv[])
 
             /* Get the top of the event list and start simulation */
             event lastEvent =  FEL.front();
+            currentTime = lastEvent.time;
+            packet sentPacket;
             //cout << "start " << lastEvent.time << endl;
             /* Perform the iteration for the given number of packets */
             while(currentTime < simRunTime) {
@@ -187,39 +195,46 @@ int main(int argc, char* argv[])
                 else if(currentEvent.type == 2) 
                 {
                     if(!lineBusy) {
-                        packet topPacket = currentEvent.source->transmitQ.top();
-                        event newSent = new_event(1, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime+topPacket.txDelay);
+                        sentPacket = currentEvent.source->transmitQ.top();
+                        event newSent = new_event(1, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime+sentPacket.txDelay);
                         add_event(newSent);
                         //cout << "Queueing delay " << queueingDelay << endl;
-                        queueingDelay += currentTime - topPacket.arrivalTime;
-                        waitTime = topPacket.txDelay;
+                        queueingDelay += currentTime - sentPacket.arrivalTime;
+                        waitTime = sentPacket.txDelay;
                         //cout << "Sent packet " << endl;
+                        //cout << "Tx time " << sentPacket.txDelay << endl;
                         lineBusy = 1;
+                        currentEvent.source->transmitQ.pop();
                     }
                     else {
                         event newWaiting = new_event(2, currentEvent.rtChannel, currentEvent.source, currentEvent.dest, currentTime+waitTime);
                         add_event(newWaiting);
-                        //cout << "New waiting event " << currentTime+125 << endl;
+                        //cout << "New waiting " << currentTime+waitTime << endl;
                     }
                 }
                 /*receive event */
                 else if(currentEvent.type == 1) {
                     //TODO update Q time data
                         /* rx has received the data */ 
-                            packet newPacket = currentEvent.source->transmitQ.top(); // get the packet to be transmitted from the
-                            totalPackets += newPacket.size;
-                            perChannelTotalPackets[newPacket.channelNum] += newPacket.size;
-                            txTime += newPacket.txDelay;
-                            if(newPacket.deadline < currentTime) { 
-                                deadlineMisses += newPacket.size;
-                                perChannelDeadlineMisses[newPacket.channelNum] += newPacket.size;
+                            //cout << "New arrival " << currentTime << endl;
+                            packet recvdPacket = sentPacket;
+                            //packet newPacket = currentEvent.source->transmitQ.top(); // get the packet to be transmitted from the
+                            totalPackets += recvdPacket.size;
+                            perChannelTotalPackets[recvdPacket.channelNum] += recvdPacket.size;
+                            txTime += recvdPacket.txDelay;
+                            //cout << "Tx time " << recvdPacket.txDelay << endl;
+                            //cout << "Total tx time " << txTime << endl;
+                            if(recvdPacket.deadline < currentTime) { 
+                                deadlineMisses += recvdPacket.size;
+                                perChannelDeadlineMisses[recvdPacket.channelNum] += recvdPacket.size;
                             }
-                            currentEvent.source->transmitQ.pop();
+                            //currentEvent.source->transmitQ.pop();
                             lineBusy = 0;
                         }
             FEL.pop_front();
             }
             
+            //cout << txTime << endl;
             averageUtilisation += (double)txTime/(double)currentTime;
             averageQueueingDelay += queueingDelay;
             averageThroughput += (double)totalPackets/(double)currentTime;
@@ -262,6 +277,7 @@ int main(int argc, char* argv[])
         }
     }
 
+    fclose(stdout);
     return 0;
 
 }
