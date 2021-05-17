@@ -12,9 +12,9 @@ using namespace std;
 #define US_IN_S 1000000
 
 /* The maximum number of realtime channels. */
-const int maxChannelNUM = 30;
+const int maxChannelNUM = 25;
 /* Number of times to run the simulator events to get an average value */
-const int simulatorRUNS = 55;
+const int simulatorRUNS = 100;
 const unsigned long long int simRunTime = 150000;
 
 int maxAcceptedChannels = maxChannelNUM;
